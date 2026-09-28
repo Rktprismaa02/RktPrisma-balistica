@@ -1,0 +1,18 @@
+name = "RktPrismaBalistica"
+uuid = "5d2c9e61-7a3b-4f0e-9c1d-8b4a6e2f7c30"
+version = "1.0.0"
+
+[deps]
+Dates = "ade2ca70-3891-5945-98fb-dc099432e06a"
+DelimitedFiles = "8bb1440f-4735-579b-a4ab-409b98df4dab"
+LibGEOS = "a90b1aa1-3769-5649-ba7e-abc5a9d163eb"
+Plots = "91a5bcdd-55d7-5caf-9e0b-520d859cae80"
+Printf = "de0858da-6303-5e67-8744-51eddeeeb8d7"
+StaticArrays = "90137ffa-7385-5640-81b9-e52037218182"
+Statistics = "10745b16-79ce-11e8-11f9-7d13ad32a3b2"
+
+[compat]
+LibGEOS = "0.9.7"
+Plots = "1.41"
+StaticArrays = "1.9"
+julia = "1.10"
