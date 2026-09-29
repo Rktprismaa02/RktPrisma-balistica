@@ -44,8 +44,9 @@ end
 const D_ext   = 540.0                            # [mm]
 const D_saida = 310.0                            # [mm]
 const alpha   = 15.0                             # meia-abertura do divergente [°]
-# inhibited_ends: 2 = as duas faces inibidas; 1 = só a traseira (junto à tubeira)
-const inh     = CENARIO === :preliminar ? 2 : 1
+# inhibited_ends: 3 = face dianteira inibida (só a traseira queima);
+#                 1 = face traseira inibida (só a dianteira queima)
+const inh     = CENARIO === :preliminar ? 3 : 1
 const prop = (rho_p = 1700.0, a = 9.0e-6, n = 0.412, Tc = 2977.0, gamma = 1.198,
               R = 332.82, frac_alumina = 0.12,
               eta_cstar = CENARIO === :preliminar ? 1.0 : 0.98)
