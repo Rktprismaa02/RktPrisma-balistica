@@ -1,75 +1,53 @@
 # ==============================================================================
-# varredura.jl — varredura exaustiva 0D da geometria do grão Finocyl
+# varredura.jl — varredura exaustiva 0D da geometria do grão Finocyl definitivo
 # ==============================================================================
-# Reproduz as duas varreduras do PFC:
-#   CENARIO = :preliminar  → Seção 5.1.6 (Tabelas 10 a 13)
-#   CENARIO = :definitivo  → Seção 6.1.5 (chanfro das aletas, erosão da garganta,
-#                            η_c* = 0,98 e escore da Equação 6.7)
+# Reproduz a varredura da Seção 6.1.5 do PFC: chanfro das aletas, erosão da
+# garganta, η_c* = 0,98, restrições de viabilidade e escore da Equação 6.7.
 #
-# Uso:   julia --project=. scripts/varredura.jl preliminar
-#        julia --project=. scripts/varredura.jl definitivo
+# Uso:   julia --project=. scripts/varredura.jl
 #
 # Cada combinação da grade passa pelo módulo geométrico e pelo modelo 0D; as que
-# violam alguma restrição são descartadas e as viáveis são ordenadas. Saídas em
-# resultados/: CSV com todas as configurações válidas (separador ; e vírgula
-# decimal) e o top-N impresso no terminal.
+# violam alguma restrição são descartadas e as viáveis são ordenadas pelo escore.
+# Saídas em resultados/: CSV com todas as configurações válidas (separador ; e
+# vírgula decimal) e o top-N impresso no terminal.
 # ==============================================================================
 using RktPrismaBalistica, Printf, Dates
 
-const CENARIO = isempty(ARGS) ? :preliminar : Symbol(ARGS[1])
-CENARIO in (:preliminar, :definitivo) || error("cenário deve ser preliminar ou definitivo")
-
 # ── Grade: (mínimo, máximo, passo) em mm; passo 0 = valor único ─────────────
-if CENARIO === :preliminar                       # Tabela 10
-    L_total   = (2600.0, 2800.0, 100.0)
-    L_finocyl = ( 800.0, 1000.0, 100.0)
-    D_core    = ( 115.0,  150.0,   5.0)
-    n_fins    = (   6.0,    8.0,   1.0)
-    fin_width = (  35.0,   50.0,   5.0)
-    fin_len   = ( 115.0,  145.0,   5.0)
-    throat    = (  95.0,  105.0,   5.0)
-    fin_taper = (   0.0,    0.0,   0.0)          # aletas retas
-else                                             # refino final (Seção 6.1.5)
-    L_total   = (2600.0, 2600.0,   0.0)
-    L_finocyl = ( 850.0,  900.0,  25.0)
-    D_core    = ( 140.0,  160.0,   5.0)
-    n_fins    = (   7.0,    9.0,   1.0)
-    fin_width = (  35.0,   50.0,   5.0)
-    fin_len   = ( 105.0,  115.0,   5.0)
-    throat    = (  94.0,   96.0,   1.0)
-    fin_taper = ( 240.0,  240.0,   0.0)          # zona de chanfro das aletas [mm]
-end
+L_total   = (2600.0, 2600.0,   0.0)
+L_finocyl = ( 850.0,  900.0,  25.0)
+D_core    = ( 140.0,  160.0,   5.0)
+n_fins    = (   7.0,    9.0,   1.0)
+fin_width = (  35.0,   50.0,   5.0)
+fin_len   = ( 105.0,  115.0,   5.0)
+throat    = (  94.0,   96.0,   1.0)
+fin_taper = ( 240.0,  240.0,   0.0)              # zona de chanfro das aletas [mm]
 
-# ── Parâmetros fixos (Tabela 11) e propelente (Tabela 8) ─────────────────────
+# ── Parâmetros fixos e propelente (Tabela 8) ─────────────────────────────────
 const D_ext   = 540.0                            # [mm]
 const D_saida = 310.0                            # [mm]
 const alpha   = 15.0                             # meia-abertura do divergente [°]
-# inhibited_ends: 3 = face dianteira inibida (só a traseira queima);
-#                 1 = face traseira inibida (só a dianteira queima)
-const inh     = CENARIO === :preliminar ? 3 : 1
+const inh     = 1                                # face traseira (junto à tubeira) inibida
 const prop = (rho_p = 1700.0, a = 9.0e-6, n = 0.412, Tc = 2977.0, gamma = 1.198,
-              R = 332.82, frac_alumina = 0.12,
-              eta_cstar = CENARIO === :preliminar ? 1.0 : 0.98)
+              R = 332.82, frac_alumina = 0.12, eta_cstar = 0.98)
 
-# ── Erosão da garganta (só no definitivo): ṙ = ṙ_ref·(P₀/P_ref)^n_t ──────────
-const EROSAO_ATIVA     = CENARIO === :definitivo
+# ── Erosão da garganta: ṙ = ṙ_ref·(P₀/P_ref)^n_t ─────────────────────────────
 const EROSAO_R_DOT_REF = 0.09                    # [mm/s]
 const EROSAO_P_REF_MPA = 5.0                     # [MPa]
 const EROSAO_N_EXP     = 0.8
 
 # ── Restrições ───────────────────────────────────────────────────────────────
 const I_ALVO        = 2_000_000.0                # [N·s]
-const TOL_ALVO      = 0.05                       # ±5 %  → 1,90 a 2,10 MN·s
-const P_MAX_LIMITE  = 7.0                        # [MPa] P_max (= P_boost)
-const P_MIN_LIMITE  = CENARIO === :preliminar ? 3.2 : 3.5   # [MPa] vale entre as fases
-const P_SUSTAIN_MAX = CENARIO === :preliminar ? 0.0 : 4.6   # [MPa] 0 = sem teto
-const M_PROP_MAX    = CENARIO === :preliminar ? 0.0 : 1000.0 # [kg] 0 = sem teto
-const PICO_NO_BOOST = CENARIO === :definitivo    # exige P_boost > P_sustain
+const TOL_ALVO      = 0.05                       # ±5 %
+const P_MAX_LIMITE  = 7.0                        # [MPa] MEOP
+const P_MIN_LIMITE  = 3.5                        # [MPa] vale entre as fases
+const P_SUSTAIN_MAX = 4.6                        # [MPa] máximo da sustentação
+const M_PROP_MAX    = 1000.0                     # [kg]
+# e P_boost > P_sustain (pico global na fase aletada)
 
-# ── Ordenação ────────────────────────────────────────────────────────────────
-# preliminar: menor massa de propelente
-# definitivo: escore (Eq. 6.7) = M_ref/m_p − λ_subida·f_subida
-#             − λ_queda·max(0, f_queda − f_alvo) − λ_steep·|dP/dt|_queda/P_boost
+# ── Escore (Eq. 6.7) ─────────────────────────────────────────────────────────
+# escore = M_ref/m_p − λ_subida·f_subida − λ_queda·max(0, f_queda − f_alvo)
+#          − λ_steep·|dP/dt|_queda/P_boost
 const M_REF      = 1000.0                        # [kg]
 const W_SUBIDA   = 0.50
 const W_QUEDA    = 0.40
@@ -77,11 +55,11 @@ const QUEDA_ALVO = 0.40
 const W_STEEP    = 0.15                          # [s]
 
 const TOP_N   = 20
-const CSV_OUT = "varredura_$(CENARIO).csv"
+const CSV_OUT = "varredura_definitiva.csv"
 # ──────────────────────────────────────────────────────────────────────────────
 
 const CFG0 = ConfigModelo(modo_simulacao = :zero_d, modo_silencioso = true,
-                          usar_erosao_garganta = EROSAO_ATIVA)
+                          usar_erosao_garganta = true)
 
 function _metricas(Lt, Lf, Dc, nf, fw, fl, th, ftap)
     ff    = clamp(Lf / Lt, 0.01, 1.0)            # fração aletada (junto à tubeira)
@@ -95,7 +73,7 @@ function _metricas(Lt, Lf, Dc, nf, fw, fl, th, ftap)
         fin_taper_n_segs      = (tzone > 1e-4 ? 8 : 1),
         x_garganta = Ltm + 0.2, D_garganta_ini = th/1e3, D_saida = D_saida/1e3,
         alpha_divergencia = alpha, L_total = Ltm + 0.5, N_malha = 80, t_maximo = 150.0,
-        erosao_ativa = EROSAO_ATIVA, erosao_r_dot_ref = EROSAO_R_DOT_REF,
+        erosao_ativa = true, erosao_r_dot_ref = EROSAO_R_DOT_REF,
         erosao_P_ref_MPa = EROSAO_P_REF_MPA, erosao_n_exp = EROSAO_N_EXP,
         prop...)
     res = redirect_stdout(devnull) do
@@ -122,29 +100,20 @@ function _metricas(Lt, Lf, Dc, nf, fw, fl, th, ftap)
             t_burn = res.t_burn, m_prop = res.m_consumida)
 end
 
-function _score(r)
-    CENARIO === :preliminar && return -r.m_prop
-    return M_REF / r.m_prop - W_SUBIDA * r.subida_frac -
-           W_QUEDA * max(0.0, r.queda_frac - QUEDA_ALVO) -
-           W_STEEP * abs(r.dPdt_queda) / max(r.P_boost, 0.1)
-end
+_score(r) = M_REF / r.m_prop - W_SUBIDA * r.subida_frac -
+            W_QUEDA * max(0.0, r.queda_frac - QUEDA_ALVO) -
+            W_STEEP * abs(r.dPdt_queda) / max(r.P_boost, 0.1)
 
-function _viavel(r)
-    ok = r.P_max <= P_MAX_LIMITE && r.P_min >= P_MIN_LIMITE &&
-         abs(r.I_total - I_ALVO) <= TOL_ALVO * I_ALVO
-    PICO_NO_BOOST && (ok &= r.P_boost > r.P_sust)
-    P_SUSTAIN_MAX > 0 && (ok &= r.P_sust <= P_SUSTAIN_MAX)
-    M_PROP_MAX    > 0 && (ok &= r.m_prop <= M_PROP_MAX)
-    return ok
-end
+_viavel(r) = r.P_max <= P_MAX_LIMITE && r.P_min >= P_MIN_LIMITE &&
+             abs(r.I_total - I_ALVO) <= TOL_ALVO * I_ALVO &&
+             r.P_boost > r.P_sust && r.P_sust <= P_SUSTAIN_MAX && r.m_prop <= M_PROP_MAX
 
 _faixa(v) = (v[3] <= 0 || v[1] >= v[2]) ? [v[1]] : collect(v[1]:v[3]:v[2])
 combos = [(Lt, Lf, Dc, nf, fw, fl, th, ft)
           for Lt in _faixa(L_total) for Lf in _faixa(L_finocyl) for Dc in _faixa(D_core)
           for nf in _faixa(n_fins)  for fw in _faixa(fin_width) for fl in _faixa(fin_len)
           for th in _faixa(throat)  for ft in _faixa(fin_taper)]
-@printf("Varredura %s: %d combinações — início %s\n", CENARIO, length(combos),
-        Dates.format(now(), "HH:MM:SS"))
+@printf("Varredura: %d combinações — início %s\n", length(combos), Dates.format(now(), "HH:MM:SS"))
 flush(stdout)
 
 linhas = NamedTuple[]
@@ -172,8 +141,7 @@ open(CSV_OUT, "w") do io
         println(io, replace(s, '.' => ','))
     end
 end
-@printf("CSV: resultados/%s\n\nTOP %d (%s):\n", CSV_OUT, TOP_N,
-        CENARIO === :preliminar ? "menor massa" : "maior escore")
+@printf("CSV: resultados/%s\n\nTOP %d (maior escore):\n", CSV_OUT, TOP_N)
 @printf("%-5s %-5s %-4s %-3s %-3s %-4s %-4s | %-6s %-6s %-6s %-6s %-8s %-6s\n",
         "L", "Lf", "Dc", "Nf", "wf", "lf", "Dt", "Pbst", "Psust", "Pmin", "tpico", "I[kNs]", "mp[kg]")
 for r in first(viaveis, min(TOP_N, length(viaveis)))

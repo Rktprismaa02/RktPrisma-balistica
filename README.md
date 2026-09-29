@@ -9,7 +9,7 @@ reproduzir as análises balísticas do trabalho:
 - modelo quasi-unidimensional (1D), com queima erosiva de Mukunda e Paul e erosão da garganta
   (Seção 6.1 e Apêndice B);
 - correção de duas fases para as partículas de Al₂O₃;
-- verificação contra o OpenMotor e varreduras de geometria.
+- verificação contra o OpenMotor e varredura da geometria definitiva.
 
 As análises térmica e estrutural do trabalho e a interface gráfica do RktPrisma não fazem parte
 deste repositório.
@@ -28,8 +28,7 @@ julia --project=. -e "using Pkg; Pkg.instantiate()"
 | Script | Seção do PFC | Tempo aproximado |
 |---|---|---|
 | `scripts/verificacao_openmotor.jl` | 5.1.4 — verificação contra o OpenMotor (Figuras 9 e 10, Tabela 9) | 1 min |
-| `scripts/varredura.jl preliminar` | 5.1.6 — dimensionamento preliminar do grão (Tabelas 10 a 13) | 1 h |
-| `scripts/varredura.jl definitivo` | 6.1.5 — geometria finocyl definitiva (Equação 6.7) | 40 min |
+| `scripts/varredura.jl` | 6.1.5 — geometria finocyl definitiva (Equação 6.7) | 1 h |
 | `scripts/projeto_final.jl` | 6.1.6 — desempenho do projeto final, 0D e 1D a −10, 25 e +50 °C | 1,5 h (0D: segundos) |
 
 Exemplo:
